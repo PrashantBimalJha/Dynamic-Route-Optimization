@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adaptive Route Planning with Adaptive Scheduling</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f4f8;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            width: 100vw;
+        }
+        .container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 40px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 1200px;
+            margin-top: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 32px;
+            text-align: center;
+        }
+        p {
+            color: #555;
+            text-align: center;
+        }
+        input[type="text"], select {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+        }
+        input[type="submit"], button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            background-color: #5cb85c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        button {
+            background-color: #f44336;
+        }
+        input[type="submit"]:hover, button:hover {
+            background-color: #4cae4c;
+        }
+        button:hover {
+            background-color: #e57373;
+        }
+        .map-container {
+            width: 100%;
+            height: 500px;
+            margin-top: 20px;
+        }
+        .route-details {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        }
+        .route-details p {
+            font-size: 16px;
+            color: #333;
+            margin: 10px 0;
+        }
+        .route-details h3 {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .route:hover {
+            background-color: #e8f5e9;
+            cursor: pointer;
+        }
+    </style>
+    <!-- Add the Google Maps JavaScript API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB5lv8AykvHdEm3Cl6xYettsh75U86Lt5Q"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Adaptive Route Planning with Adaptive Scheduling</h1>
+        <p>Enter the starting and ending locations, and choose your mode of transport.</p>
+        <form id="routeForm">
+            <label for="start">Start Location (City/Village Name, Address, etc.):</label><br>
+            <input type="text" id="start" name="start" placeholder="Enter start location (e.g., Bangalore)" required><br>
+
+            <label for="end">End Location (City/Village Name, Address, etc.):</label><br>
+            <input type="text" id="end" name="end" placeholder="Enter end location (e.g., Chennai)" required><br>
+
+            <label for="mode">Mode of Transport:</label><br>
+            <select id="mode" name="mode" required>
+                <option value="DRIVING">Car</option>
+                <option value="BICYCLING">Bike</option>
+                <option value="TRANSIT">Bus</option>
+            </select><br>
+
+            <input type="submit" value="Find Optimal Route">
+        </form>
+
+        <button id="resetButton">Reset</button>
+
+        <!-- Map Display -->
+        <div id="map" class="map-container"></div>
+
+        <!-- Route Details Display -->
+        <div id="routeDetails" class="route-details"></div>
+    </div>
+
+    <script>
+        let directionsRenderers = []; // To store the renderers for each route
+        let map; // Reference to the map object
+
+        // Handle form submission
+        document.getElementById('routeForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const start = document.getElementById('start').value;
+            const end = document.getElementById('end').value;
+            const mode = document.getElementById('mode').value;
+
+            if (start && end && mode) {
+                showAllRoutesOnMap(start, end, mode);
+            }
+        });
+
+        // Reset the map and route details
+        document.getElementById('resetButton').addEventListener('click', function() {
+            resetMapAndRoutes();
+        });
+
+        // Function to show all routes on the map
+        function showAllRoutesOnMap(start, end, mode) {
+            const mapContainer = document.getElementById('map');
+            const routeDetailsContainer = document.getElementById('routeDetails');
+            routeDetailsContainer.innerHTML = ''; // Clear previous details
+            directionsRenderers.forEach(renderer => renderer.setMap(null)); // Clear previous routes
+
+            map = new google.maps.Map(mapContainer, {
+                zoom: 7,
+                center: { lat: 20.5937, lng: 78.9629 }, // Centered on India
+            });
+
+            const directionsService = new google.maps.DirectionsService();
+
+            directionsService.route({
+                origin: start,
+                destination: end,
+                travelMode: mode,
+                provideRouteAlternatives: true // Allow multiple routes
+            }, function(result, status) {
+                if (status === 'OK') {
+                    result.routes.forEach((route, index) => {
+                        const renderer = new google.maps.DirectionsRenderer({
+                            map: map,
+                            routeIndex: index,
+                            suppressMarkers: false,
+                            polylineOptions: {
+                                strokeColor: index === 0 ? '#1e90ff' : '#808080', // Highlight first route
+                                strokeOpacity: 0.7,
+                                strokeWeight: 5,
+                            }
+                        });
+                        renderer.setDirections(result);
+                        directionsRenderers.push(renderer);
+
+                        // Calculate arrival time based on duration
+                        const now = new Date();
+                        const arrivalTime = new Date(now.getTime() + route.legs[0].duration.value * 1000); // in milliseconds
+                        const arrivalTimeString = arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                        // Create route details
+                        let routeInfo = `
+                            <h3>Route ${index + 1}</h3>
+                            <p><strong>Distance:</strong> ${route.legs[0].distance.text}</p>
+                            <p><strong>Duration:</strong> ${route.legs[0].duration.text}</p>
+                            <p><strong>Arrival Time:</strong> ${arrivalTimeString}</p>
+                        `;
+
+                        // Add bus numbers, distance, and arrival time for transit (bus) mode
+                        if (mode === 'TRANSIT') {
+                            let transitSteps = '';
+                            route.legs[0].steps
+                                .filter(step => step.transit_details && step.transit_details.line)
+                                .forEach(step => {
+                                    const busNumber = step.transit_details.line.short_name;
+                                    const busDistance = step.distance.text;
+                                    const busArrivalTime = new Date(now.getTime() + step.duration.value * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                    
+                                    // Simulate Adaptive Scheduling adjustments for buses
+                                    const adjustedArrivalTime = adaptiveScheduling(busArrivalTime, busNumber);
+
+                                    transitSteps += `<p><strong>Bus No:</strong> ${busNumber}, <strong>Distance:</strong> ${busDistance}, <strong>Adjusted Arrival Time:</strong> ${adjustedArrivalTime}</p>`;
+                                });
+
+                            if (transitSteps) {
+                                routeInfo += `<h4>Bus Details (Adaptive Scheduling Applied):</h4>${transitSteps}`;
+                            }
+                        }
+
+                        const routeDiv = document.createElement('div');
+                        routeDiv.classList.add('route');
+                        routeDiv.innerHTML = routeInfo;
+                        routeDiv.addEventListener('mouseover', () => highlightRoute(index)); // Highlight on hover
+                        routeDiv.addEventListener('mouseout', () => resetRoutes()); // Reset on mouseout
+                        routeDetailsContainer.appendChild(routeDiv);
+                    });
+                } else {
+                    alert(`Error: ${status}`);
+                }
+            });
+        }
+
+        // Highlight the selected route
+        function highlightRoute(index) {
+            directionsRenderers.forEach((renderer, i) => {
+                if (i === index) {
+                    renderer.setOptions({
+                        polylineOptions: {
+                            strokeColor: '#1e90ff', // Highlight color
+                            strokeOpacity: 1.0,
+                            strokeWeight: 6,
+                        }
+                    });
+                } else {
+                    renderer.setOptions({
+                        polylineOptions: {
+                            strokeColor: '#808080', // Default color for non-selected routes
+                            strokeOpacity: 0.7,
+                            strokeWeight: 5,
+                        }
+                    });
+                }
+            });
+        }
+
+        // Adaptive Scheduling logic to adjust bus schedules to prevent bunching
+        function adaptiveScheduling(arrivalTime, busNumber) {
+            // Example: Stagger bus arrivals by 5 minutes to prevent bunching
+            let now = new Date();
+            let currentHour = now.getHours();
+            let adjustedTime = new Date(now);
+
+            // Logic: Add 5 minutes delay for each bus if they are too close
+            let minutesToAdd = 0;
+            if (busNumber) {
+                minutesToAdd = busNumber % 10; // Simulating adjustment based on bus number
+            }
+
+            adjustedTime.setMinutes(adjustedTime.getMinutes() + minutesToAdd);
+            return adjustedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Reset all routes to default style
+        function resetRoutes() {
+            directionsRenderers.forEach((renderer, i) => {
+                renderer.setOptions({
+                    polylineOptions: {
+                        strokeColor: i === 0 ? '#1e90ff' : '#808080', // Highlight the first route
+                        strokeOpacity: 0.7,
+                        strokeWeight: 5,
+                    }
+                });
+            });
+        }
+
+        // Reset the map and clear route details
+        function resetMapAndRoutes() {
+            if (map) {
+                map = new google.maps.Map(document.getElementById('map'), {
+                    zoom: 7,
+                    center: { lat: 20.5937, lng: 78.9629 } // Re-center on India
+                });
+                document.getElementById('routeDetails').innerHTML = ''; // Clear route details
+                directionsRenderers.forEach(renderer => renderer.setMap(null)); // Clear all routes from map
+                directionsRenderers = [];
+            }
+        }
+    </script>
+</body>
+</html>
