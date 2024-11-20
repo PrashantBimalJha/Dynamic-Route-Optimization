@@ -6,7 +6,7 @@ app = Flask(__name__)
 app.secret_key = 'supersecretkey'  # Needed for flashing messages to the frontend
 
 # Initialize Google Maps API client (replace 'YOUR_GOOGLE_MAPS_API_KEY' with your actual API key)
-gmaps = googlemaps.Client(key='AIzaSyB5lv8AykvHdEm3Cl6xYettsh75U86Lt5Q')
+gmaps = googlemaps.Client(key='key')
 
 # Utility function to format travel time into days, hours, and minutes
 def format_travel_time(minutes):
